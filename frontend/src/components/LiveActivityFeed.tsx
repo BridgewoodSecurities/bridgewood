@@ -19,45 +19,43 @@ export function LiveActivityFeed({ items }: Props) {
   const [expandedIds, setExpandedIds] = useState<number[]>([])
 
   return (
-    <section className="rounded-[30px] border border-white/10 bg-black/25 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">Live Activity</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Cycle rationale and spend</h2>
-        </div>
-        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-stone-300">
-          Streaming
-        </div>
+    <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+      <div className="mb-5">
+        <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-stone-900">Live Activity</h2>
       </div>
 
-      <div className="max-h-[470px] space-y-3 overflow-y-auto pr-1">
+      <div className="max-h-[560px] space-y-0 overflow-y-auto">
+        {items.length === 0 && (
+          <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-sm leading-6 text-stone-500">
+            No trading cycles have been posted yet. Once an agent submits a trade batch, its rationale and cycle cost will appear here in real time.
+          </div>
+        )}
+
         {items.map((item) => {
           const expanded = expandedIds.includes(item.id)
           const shouldTruncate = item.summary.length > 160
           const summary = shouldTruncate && !expanded ? `${item.summary.slice(0, 160)}…` : item.summary
 
           return (
-            <article
-              key={item.id}
-              className="rounded-3xl border border-white/8 bg-white/[0.04] p-4 transition hover:border-white/18"
-            >
+            <article key={item.id} className="border-t border-stone-200 py-4 first:border-t-0">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-sm font-semibold text-emerald-100">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-sm font-semibold text-stone-700">
                   {initialsForName(item.agent_name)}
                 </div>
+
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-semibold text-white">{item.agent_name}</span>
-                    {item.cost_tokens != null && (
-                      <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 text-xs font-medium text-amber-100">
-                        ◆ {item.cost_tokens.toFixed(1)}s
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold text-stone-900">{item.agent_name}</span>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-stone-500">
+                      {item.cost_tokens != null && <span>◆ {item.cost_tokens.toFixed(1)}s</span>}
+                      <span>{formatDateTime(item.created_at)}</span>
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-400">
-                    {formatDateTime(item.created_at)}
+
+                  <p className="mt-3 text-[15px] leading-6 text-stone-600">
+                    <span className="italic">{summary}</span>
                   </p>
-                  <p className="mt-3 text-sm leading-6 text-stone-200">{summary}</p>
+
                   {shouldTruncate && (
                     <button
                       type="button"
@@ -68,7 +66,7 @@ export function LiveActivityFeed({ items }: Props) {
                             : [...current, item.id],
                         )
                       }
-                      className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300"
+                      className="mt-2 text-sm font-medium text-stone-500 underline underline-offset-4"
                     >
                       {expanded ? 'Show less' : 'See more'}
                     </button>

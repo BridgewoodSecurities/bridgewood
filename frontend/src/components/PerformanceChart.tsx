@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import { formatCompactCurrency, formatCurrency, formatDateTime } from '../lib/format'
+import { formatAxisCurrency, formatCurrency, formatDateTime } from '../lib/format'
 import { colorForAgent } from '../lib/palette'
 import type { LeaderboardEntry, SnapshotPoint } from '../types'
 
@@ -21,65 +21,75 @@ interface Props {
 
 function buildRows(points: SnapshotPoint[]) {
   const grouped = new Map<string, Record<string, number | string>>()
-  ;[...points]
-    .sort((left, right) => new Date(left.snapshot_at).getTime() - new Date(right.snapshot_at).getTime())
-    .forEach((point) => {
-      const key = point.snapshot_at
-      const row = grouped.get(key) ?? { timestamp: key }
-      row[point.agent_id] = point.total_value
-      grouped.set(key, row)
-    })
+
+  for (const point of [...points].sort(
+    (left, right) => new Date(left.snapshot_at).getTime() - new Date(right.snapshot_at).getTime(),
+  )) {
+    const key = point.snapshot_at
+    const row = grouped.get(key) ?? { timestamp: key }
+    row[point.agent_id] = point.total_value
+    grouped.set(key, row)
+  }
+
   return Array.from(grouped.values())
 }
 
 export function PerformanceChart({ snapshots, agents, hiddenIds }: Props) {
   const rows = buildRows(snapshots)
   const visibleAgents = agents.filter((agent) => !hiddenIds.includes(agent.id))
+  const hasCompetitors = agents.some((agent) => !agent.is_benchmark)
+  const showSinglePoint = rows.length < 2
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
+    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)] md:p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300/80">
-            Performance History
+        <div className="space-y-1.5">
+          <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-stone-900">Performance History</h2>
+          <p className="max-w-3xl text-sm text-stone-500">
+            * Entries with asterisks are paper-trading accounts. The S&amp;P 500 line uses SPY as the proxy benchmark.
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Agent equity curves against the opening stake</h2>
         </div>
-        <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs uppercase tracking-[0.22em] text-stone-300">
-          Baseline {formatCurrency(10000)}
+        <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-500">
+          Starting Cash {formatCurrency(10000)}
         </div>
       </div>
 
-      <div className="h-[360px]">
+      <div className="h-[360px] min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ top: 12, right: 24, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+            <CartesianGrid stroke="#ede7dd" vertical={false} />
             <ReferenceLine
               y={10000}
-              stroke="rgba(255,255,255,0.25)"
+              stroke="#a8a29e"
               strokeDasharray="6 6"
+              label={{
+                value: '$10K starting cash',
+                position: 'insideBottomRight',
+                fill: '#a8a29e',
+                fontSize: 12,
+              }}
             />
             <XAxis
               dataKey="timestamp"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#c7c2b8', fontSize: 12 }}
+              tick={{ fill: '#78716c', fontSize: 12 }}
               tickFormatter={(value) => formatDateTime(String(value))}
               minTickGap={24}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#c7c2b8', fontSize: 12 }}
-              tickFormatter={(value) => formatCompactCurrency(Number(value))}
-              width={80}
+              tick={{ fill: '#78716c', fontSize: 12 }}
+              tickFormatter={(value) => formatAxisCurrency(Number(value))}
+              width={84}
             />
             <Tooltip
               contentStyle={{
-                background: 'rgba(17, 24, 39, 0.96)',
-                borderRadius: 18,
-                border: '1px solid rgba(255,255,255,0.12)',
-                boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
+                background: '#ffffff',
+                borderRadius: 16,
+                border: '1px solid #e7e5e4',
+                boxShadow: '0 16px 36px rgba(15, 23, 42, 0.1)',
               }}
               formatter={(value, name) => [formatCurrency(Number(value ?? 0)), String(name)]}
               labelFormatter={(label) => formatDateTime(String(label))}
@@ -91,15 +101,27 @@ export function PerformanceChart({ snapshots, agents, hiddenIds }: Props) {
                 dataKey={agent.id}
                 name={agent.name}
                 stroke={colorForAgent(agent.id, agent.is_benchmark)}
-                strokeWidth={agent.is_benchmark ? 2.5 : 3}
-                dot={false}
-                activeDot={{ r: 5, strokeWidth: 0 }}
+                strokeWidth={agent.is_benchmark ? 2.5 : 2.8}
+                dot={showSinglePoint ? { r: 4, strokeWidth: 0 } : false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
                 connectNulls
               />
             ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {showSinglePoint && (
+        <div className="mt-4 text-sm text-stone-500">
+          The chart will fill in as additional snapshots are captured throughout the session.
+        </div>
+      )}
+
+      {!hasCompetitors && (
+        <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          No agents have been registered yet. Right now the chart only shows the S&amp;P 500 baseline so the first competitor has a clean benchmark from day one.
+        </div>
+      )}
     </div>
   )
 }

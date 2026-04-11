@@ -9,16 +9,16 @@ interface Props {
 
 export function TimeRangeSelector({ value, onChange }: Props) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="inline-flex overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
       {RANGES.map((range) => (
         <button
           key={range}
           type="button"
           onClick={() => onChange(range)}
-          className={`rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.22em] transition ${
+          className={`border-r border-stone-200 px-3.5 py-2 text-xs font-semibold tracking-[0.16em] transition last:border-r-0 ${
             value === range
-              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-50'
-              : 'border-white/12 bg-white/5 text-stone-300 hover:border-white/30 hover:text-white'
+              ? 'bg-stone-900 text-white'
+              : 'bg-white text-stone-600 hover:bg-stone-50'
           }`}
         >
           {range}

@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 :root {
-  color: #f5f1e8;
-  background: #0d0b09;
-  font-family: 'Space Grotesk', sans-serif;
+  color: #1c1917;
+  background: #f9f8f4;
+  font-family: 'Instrument Sans', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,7 +23,7 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Instrument Sans', sans-serif;
 }
 
 button,

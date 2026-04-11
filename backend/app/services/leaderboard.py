@@ -22,6 +22,10 @@ def _benchmark_id(symbol: str) -> str:
     return f"benchmark:{symbol}"
 
 
+def _benchmark_name(symbol: str) -> str:
+    return "S&P 500 Index" if symbol == settings.benchmark_symbol else f"{symbol} Benchmark"
+
+
 def get_daily_change_pct(db: Session, agent: Agent) -> float:
     cutoff = datetime.utcnow() - timedelta(days=2)
     snapshots = list(
@@ -128,7 +132,7 @@ def build_leaderboard_payload(db: Session, prices: dict[str, Decimal], *, timest
             entries.append(
                 LeaderboardEntry(
                     id=_benchmark_id(benchmark_state.symbol),
-                    name=f"{benchmark_state.symbol} Benchmark",
+                    name=_benchmark_name(benchmark_state.symbol),
                     cash=0.0,
                     total_value=float(total_value),
                     pnl=float(pnl),
@@ -178,7 +182,7 @@ def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
         points.append(
             SnapshotPoint(
                 agent_id=_benchmark_id(snapshot.symbol),
-                name=f"{snapshot.symbol} Benchmark",
+                name=_benchmark_name(snapshot.symbol),
                 total_value=float(snapshot.total_value),
                 snapshot_at=snapshot.snapshot_at,
                 is_benchmark=True,

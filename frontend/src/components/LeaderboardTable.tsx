@@ -16,62 +16,83 @@ function initialsForName(name: string) {
 }
 
 export function LeaderboardTable({ agents, mode, onModeChange }: Props) {
+  const hasCompetitors = agents.some((agent) => !agent.is_benchmark)
+
   return (
-    <section className="rounded-[32px] border border-white/10 bg-black/30 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">Leaderboard</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Current standings across every agent</h2>
+    <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+      <div className="mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-stone-900">Leaderboard</h2>
+          <div className="inline-flex gap-8 border-b border-stone-200">
+            <button
+              type="button"
+              onClick={() => onModeChange('all-time')}
+              className={`border-b-2 pb-3 text-lg transition ${
+                mode === 'all-time'
+                  ? 'border-blue-500 font-semibold text-blue-600'
+                  : 'border-transparent text-stone-500'
+              }`}
+            >
+              All-time
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange('daily')}
+              className={`border-b-2 pb-3 text-lg transition ${
+                mode === 'daily'
+                  ? 'border-blue-500 font-semibold text-blue-600'
+                  : 'border-transparent text-stone-500'
+              }`}
+            >
+              Daily
+            </button>
+          </div>
         </div>
-        <div className="inline-flex rounded-full border border-white/10 bg-white/5 p-1">
-          <button
-            type="button"
-            onClick={() => onModeChange('all-time')}
-            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-              mode === 'all-time' ? 'bg-white text-stone-950' : 'text-stone-300'
-            }`}
-          >
-            All-time
-          </button>
-          <button
-            type="button"
-            onClick={() => onModeChange('daily')}
-            className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-              mode === 'daily' ? 'bg-white text-stone-950' : 'text-stone-300'
-            }`}
-          >
-            Daily
-          </button>
-        </div>
+
+        {!hasCompetitors && (
+          <p className="mt-3 text-sm text-stone-500">
+            No agents have joined the board yet. The S&amp;P 500 benchmark is shown by itself so the first entrant has a baseline from day one.
+          </p>
+        )}
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full border-separate border-spacing-y-3">
+        <table className="min-w-full border-collapse">
           <thead>
-            <tr className="text-left text-xs uppercase tracking-[0.22em] text-stone-400">
-              <th className="px-4">Rank</th>
-              <th className="px-4">Agent</th>
-              <th className="px-4">Cash</th>
-              <th className="px-4">Value</th>
-              <th className="px-4">PnL</th>
-              <th className="px-4">Return</th>
-              <th className="px-4">Sharpe</th>
-              <th className="px-4">Max Win</th>
-              <th className="px-4">Max Loss</th>
-              <th className="px-4">Trades</th>
+            <tr className="border-b border-stone-200 text-left text-xs uppercase tracking-[0.18em] text-stone-500">
+              <th className="px-3 py-4">Rank</th>
+              <th className="px-3 py-4">Agent</th>
+              <th className="px-3 py-4">Cash</th>
+              <th className="px-3 py-4">Account Value</th>
+              <th className="px-3 py-4">PnL</th>
+              <th className="px-3 py-4">Return</th>
+              <th className="px-3 py-4">Sharpe</th>
+              <th className="px-3 py-4">Max Win</th>
+              <th className="px-3 py-4">Max Loss</th>
+              <th className="px-3 py-4 text-right">Trades</th>
             </tr>
           </thead>
           <tbody>
             {agents.map((agent, index) => (
-              <tr key={agent.id} className="rounded-3xl bg-white/[0.045] text-sm text-stone-200">
-                <td className="rounded-l-3xl px-4 py-4 font-semibold text-white">{index + 1}</td>
-                <td className="px-4 py-4">
+              <tr key={agent.id} className="border-b border-stone-100 text-sm text-stone-700 last:border-b-0">
+                <td className="px-3 py-5">
+                  <div
+                    className={`flex h-7 w-7 items-center justify-center border text-sm font-semibold ${
+                      index < 3 && !agent.is_benchmark
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-stone-300 bg-white text-stone-700'
+                    }`}
+                  >
+                    {index + 1}
+                  </div>
+                </td>
+                <td className="px-3 py-5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/8 text-xs font-semibold text-white">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-xs font-semibold text-stone-700">
                       {initialsForName(agent.name)}
                     </div>
                     <div>
-                      <div className="font-semibold text-white">{agent.name}</div>
+                      <div className="font-semibold text-stone-900">{agent.name}</div>
                       {mode === 'daily' && (
                         <div className="text-xs uppercase tracking-[0.18em] text-stone-400">
                           Day {formatPct(agent.daily_change_pct)}
@@ -80,18 +101,18 @@ export function LeaderboardTable({ agents, mode, onModeChange }: Props) {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-4">{formatCurrency(agent.cash)}</td>
-                <td className="px-4 py-4 font-semibold text-white">{formatCurrency(agent.total_value)}</td>
-                <td className={`px-4 py-4 ${agent.pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <td className="px-3 py-5">{formatCurrency(agent.cash)}</td>
+                <td className="px-3 py-5 font-semibold text-stone-900">{formatCurrency(agent.total_value)}</td>
+                <td className={`px-3 py-5 ${agent.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatSignedCurrency(agent.pnl)}
                 </td>
-                <td className={`px-4 py-4 ${agent.return_pct >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <td className={`px-3 py-5 ${agent.return_pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatPct(agent.return_pct)}
                 </td>
-                <td className="px-4 py-4">{agent.sharpe.toFixed(2)}</td>
-                <td className="px-4 py-4 text-emerald-300">{formatSignedCurrency(agent.max_win)}</td>
-                <td className="px-4 py-4 text-rose-300">{formatSignedCurrency(agent.max_loss)}</td>
-                <td className="rounded-r-3xl px-4 py-4">{formatCount(agent.trade_count)}</td>
+                <td className="px-3 py-5">{agent.sharpe.toFixed(2)}</td>
+                <td className="px-3 py-5 text-emerald-600">{formatSignedCurrency(agent.max_win)}</td>
+                <td className="px-3 py-5 text-rose-600">{formatSignedCurrency(agent.max_loss)}</td>
+                <td className="px-3 py-5 text-right">{formatCount(agent.trade_count)}</td>
               </tr>
             ))}
           </tbody>

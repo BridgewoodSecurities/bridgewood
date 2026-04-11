@@ -62,10 +62,9 @@ def main() -> None:
         matt = create_user(client, args.base_url, args.admin_token, f"matt-{suffix}")
 
         agents = [
-          create_agent(client, args.base_url, args.admin_token, ben["user_id"], "GPT 5.4"),
-          create_agent(client, args.base_url, args.admin_token, ben["user_id"], "Claude Opus 4.6"),
-          create_agent(client, args.base_url, args.admin_token, matt["user_id"], "Gemini 3.1 Pro"),
-          create_agent(client, args.base_url, args.admin_token, matt["user_id"], "Human"),
+            create_agent(client, args.base_url, args.admin_token, ben["user_id"], "GPT 5.4"),
+            create_agent(client, args.base_url, args.admin_token, ben["user_id"], "Claude Opus 4.6"),
+            create_agent(client, args.base_url, args.admin_token, matt["user_id"], "Gemini 3.1 Pro"),
         ]
 
         orders = [
@@ -97,12 +96,12 @@ def main() -> None:
                 92.8,
             ),
             (
-                agents[3]["api_key"],
+                agents[2]["api_key"],
                 [
-                    {"symbol": "SPY", "side": "buy", "amount_dollars": 1000, "client_order_id": f"spy-{suffix}-1"},
+                    {"symbol": "MSFT", "side": "buy", "amount_dollars": 220, "client_order_id": f"msft-{suffix}-3"},
                 ],
-                "Human baseline allocation into the broad market.",
-                12.0,
+                "Adding a small software position after the initial momentum sleeve.",
+                31.2,
             ),
         ]
 

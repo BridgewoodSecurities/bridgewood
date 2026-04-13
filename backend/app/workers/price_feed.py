@@ -109,12 +109,46 @@ class PriceFeedService:
                 pass
             await asyncio.sleep(self.refresh_seconds)
 
+    @staticmethod
+    def _legacy_looks_paper(base_url: str | None) -> bool:
+        return bool(base_url and "paper" in base_url.lower())
+
+    @staticmethod
+    def _decrypt_optional_secret(value: str | None) -> str | None:
+        return decrypt_secret(value) if value is not None else None
+
     def _get_any_credentials(self, db) -> AlpacaCredentials | None:
         user = db.scalar(select(User).order_by(User.created_at.asc()))
         if user is None:
             return None
-        return AlpacaCredentials(
-            api_key=decrypt_secret(user.alpaca_api_key),
-            secret_key=decrypt_secret(user.alpaca_secret_key),
-            base_url=user.alpaca_base_url,
-        )
+
+        paper_api_key = self._decrypt_optional_secret(user.alpaca_paper_api_key)
+        paper_secret_key = self._decrypt_optional_secret(user.alpaca_paper_secret_key)
+        if paper_api_key and paper_secret_key:
+            return AlpacaCredentials(
+                api_key=paper_api_key,
+                secret_key=paper_secret_key,
+                base_url=self.settings.alpaca_paper_trading_url,
+            )
+
+        live_api_key = self._decrypt_optional_secret(user.alpaca_live_api_key)
+        live_secret_key = self._decrypt_optional_secret(user.alpaca_live_secret_key)
+        if live_api_key and live_secret_key:
+            return AlpacaCredentials(
+                api_key=live_api_key,
+                secret_key=live_secret_key,
+                base_url=self.settings.alpaca_live_trading_url,
+            )
+
+        if user.alpaca_api_key and user.alpaca_secret_key:
+            return AlpacaCredentials(
+                api_key=decrypt_secret(user.alpaca_api_key),
+                secret_key=decrypt_secret(user.alpaca_secret_key),
+                base_url=(
+                    self.settings.alpaca_paper_trading_url
+                    if self._legacy_looks_paper(user.alpaca_base_url)
+                    else self.settings.alpaca_live_trading_url
+                ),
+            )
+
+        return None

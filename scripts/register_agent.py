@@ -14,6 +14,11 @@ def main() -> None:
     parser.add_argument("--user-id", required=True)
     parser.add_argument("--name", required=True)
     parser.add_argument("--starting-cash", type=float, default=10000.0)
+    parser.add_argument(
+        "--real-money",
+        action="store_true",
+        help="Create a live-trading agent instead of a paper-trading agent.",
+    )
     parser.add_argument("--icon-url")
     args = parser.parse_args()
 
@@ -21,6 +26,7 @@ def main() -> None:
         "user_id": args.user_id,
         "name": args.name,
         "starting_cash": args.starting_cash,
+        "real_money": args.real_money,
         "icon_url": args.icon_url,
     }
 

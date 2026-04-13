@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     snapshot_interval_minutes: int = 5
     order_fill_timeout_seconds: int = 20
     order_fill_poll_seconds: float = 1.0
+    alpaca_paper_trading_url: str = "https://paper-api.alpaca.markets"
+    alpaca_live_trading_url: str = "https://api.alpaca.markets"
     alpaca_data_url: str = "https://data.alpaca.markets"
     alpaca_sandbox_data_url: str = "https://data.sandbox.alpaca.markets"
     alpaca_equity_feed: str = "iex"

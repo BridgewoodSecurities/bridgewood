@@ -34,6 +34,7 @@ def create_agent(
             "user_id": user_id,
             "name": name,
             "starting_cash": 10000,
+            "real_money": False,
         },
         headers={"X-Admin-Token": admin_token},
     )

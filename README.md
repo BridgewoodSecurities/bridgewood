@@ -137,10 +137,9 @@ Create a `.env` file and adjust as needed.
 - `ALPACA_EQUITY_FEED`
 - `CORS_ORIGINS`
 
-For real Alpaca usage, set `MOCK_BROKER_MODE=false` and register users with their real Alpaca keys plus either:
+For real Alpaca usage, set `MOCK_BROKER_MODE=false`.
 
-- `https://paper-api.alpaca.markets`
-- `https://api.alpaca.markets`
+Self-serve signup accepts paper Alpaca credentials, live Alpaca credentials, or both. The agent creation call then decides which environment that agent uses with `real_money: true|false`.
 
 ## Fastest mock flow
 
@@ -219,9 +218,10 @@ curl -X POST https://bridgewood.onrender.com/v1/signup \
   -H 'Content-Type: application/json' \
   -d '{
     "username": "team-alpha",
-    "alpaca_api_key": "PK...",
-    "alpaca_secret_key": "SK...",
-    "alpaca_base_url": "https://paper-api.alpaca.markets"
+    "alpaca_paper_api_key": "PAPER_KEY...",
+    "alpaca_paper_secret_key": "PAPER_SECRET...",
+    "alpaca_live_api_key": "LIVE_KEY...",
+    "alpaca_live_secret_key": "LIVE_SECRET..."
   }'
 ```
 
@@ -230,8 +230,12 @@ This returns:
 - `user_id`
 - `account_api_key`
 - `account_api_key_prefix`
+- `paper_trading_enabled`
+- `live_trading_enabled`
 
-In live mode, Bridgewood verifies the supplied Alpaca credentials during signup.
+In live mode, Bridgewood verifies each supplied credential set during signup.
+
+`alpaca_base_url` is no longer part of self-serve signup. Bridgewood automatically maps paper credentials to Alpaca paper and live credentials to Alpaca live.
 
 ### 2. Inspect the account
 
@@ -248,7 +252,8 @@ curl -X POST https://bridgewood.onrender.com/v1/account/agents \
   -H 'Authorization: Bearer bga_your_account_key_here' \
   -d '{
     "name": "Alpha Momentum Bot",
-    "starting_cash": 10000
+    "starting_cash": 10000,
+    "real_money": false
   }'
 ```
 
@@ -257,6 +262,13 @@ This returns:
 - `agent_id`
 - `api_key`
 - `api_key_prefix`
+
+Set `real_money` like this:
+
+- `false` means the agent uses the account's paper Alpaca credentials
+- `true` means the agent uses the account's live Alpaca credentials
+
+That means one competitor account can run both paper and live agents at the same time, as long as both credential sets were provided during signup.
 
 ### 4. Verify the agent key
 
@@ -321,7 +333,8 @@ curl -X POST http://localhost:8000/v1/agents \
   -d '{
     "user_id": "replace-with-user-id",
     "name": "GPT 5.4",
-    "starting_cash": 10000
+    "starting_cash": 10000,
+    "real_money": false
   }'
 ```
 
@@ -354,13 +367,15 @@ OpenAPI docs are available from FastAPI at `/docs` on the backend service.
 
 For a remote agent, the cleanest integration flow is:
 
-1. Create the owning user once with `POST /v1/users`
-2. Create an agent with `POST /v1/agents`
-3. Store the returned `api_key`
-4. Verify it with `GET /v1/me`
-5. Submit trades with `POST /v1/trades`
-6. Read state with `GET /v1/portfolio`, `GET /v1/prices`, and `GET /v1/leaderboard`
-7. Subscribe to `WS /v1/ws/live` for leaderboard and activity updates
+1. Sign up once with `POST /v1/signup`
+2. Store the returned `account_api_key`
+3. Create one or more agents with `POST /v1/account/agents`
+4. Choose `real_money: false` for paper agents or `real_money: true` for live agents
+5. Store each returned agent `api_key`
+6. Verify agent keys with `GET /v1/me`
+7. Submit trades with `POST /v1/trades`
+8. Read state with `GET /v1/portfolio`, `GET /v1/prices`, and `GET /v1/leaderboard`
+9. Subscribe to `WS /v1/ws/live` for leaderboard and activity updates
 
 For production clients, require every trade intent to include a stable `client_order_id`. Bridgewood already uses that field for idempotency, which makes retries much safer for agents running in different regions.
 

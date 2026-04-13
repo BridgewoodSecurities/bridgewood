@@ -123,16 +123,19 @@ class UserCreateRequest(APIModel):
 class UserCreateResponse(APIModel):
     user_id: str
     username: str
-    alpaca_base_url: str
+    alpaca_base_url: str | None = None
     is_paper: bool
     account_api_key: str | None = None
     account_api_key_prefix: str | None = None
+    paper_trading_enabled: bool = False
+    live_trading_enabled: bool = False
 
 
 class AgentCreateRequest(APIModel):
     user_id: str
     name: str = Field(min_length=1, max_length=255)
     starting_cash: float = Field(gt=0)
+    real_money: bool = False
     icon_url: str | None = None
 
     @field_validator("name")
@@ -150,6 +153,7 @@ class AgentCreateResponse(APIModel):
     api_key: str
     api_key_prefix: str
     starting_cash: float
+    real_money: bool = False
     icon_url: str | None = None
     is_paper: bool
 
@@ -160,6 +164,7 @@ class AgentIdentity(APIModel):
     name: str
     icon_url: str | None = None
     starting_cash: float
+    real_money: bool = False
     is_paper: bool
 
 
@@ -184,12 +189,52 @@ class MockAgentCreateResponse(APIModel):
     name: str
     api_key: str
     account_api_key: str | None = None
+    real_money: bool = False
     is_paper: bool
     username: str
 
 
-class SignupRequest(UserCreateRequest):
-    pass
+class SignupRequest(APIModel):
+    username: str = Field(min_length=3, max_length=120)
+    alpaca_paper_api_key: str | None = None
+    alpaca_paper_secret_key: str | None = None
+    alpaca_live_api_key: str | None = None
+    alpaca_live_secret_key: str | None = None
+
+    @field_validator(
+        "username",
+        "alpaca_paper_api_key",
+        "alpaca_paper_secret_key",
+        "alpaca_live_api_key",
+        "alpaca_live_secret_key",
+    )
+    @classmethod
+    def normalize_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_credential_pairs(self) -> "SignupRequest":
+        has_paper_key = self.alpaca_paper_api_key is not None
+        has_paper_secret = self.alpaca_paper_secret_key is not None
+        has_live_key = self.alpaca_live_api_key is not None
+        has_live_secret = self.alpaca_live_secret_key is not None
+
+        if has_paper_key != has_paper_secret:
+            raise ValueError(
+                "alpaca_paper_api_key and alpaca_paper_secret_key must both be provided."
+            )
+        if has_live_key != has_live_secret:
+            raise ValueError(
+                "alpaca_live_api_key and alpaca_live_secret_key must both be provided."
+            )
+        if not (has_paper_key or has_live_key):
+            raise ValueError(
+                "Provide at least one Alpaca credential set: paper, live, or both."
+            )
+        return self
 
 
 class SignupResponse(UserCreateResponse):
@@ -200,6 +245,7 @@ class SignupResponse(UserCreateResponse):
 class AccountAgentCreateRequest(APIModel):
     name: str = Field(min_length=1, max_length=255)
     starting_cash: float = Field(default=10000.0, gt=0)
+    real_money: bool = False
     icon_url: str | None = None
 
     @field_validator("name")
@@ -217,6 +263,7 @@ class AccountAgentSummary(APIModel):
     icon_url: str | None = None
     starting_cash: float
     api_key_prefix: str
+    real_money: bool = False
     is_paper: bool
     created_at: datetime
 
@@ -224,8 +271,8 @@ class AccountAgentSummary(APIModel):
 class AccountIdentity(APIModel):
     user_id: str
     username: str
-    alpaca_base_url: str
-    is_paper: bool
+    paper_trading_enabled: bool
+    live_trading_enabled: bool
     account_api_key_prefix: str | None = None
 
 

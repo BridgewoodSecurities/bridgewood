@@ -95,15 +95,82 @@ def _money(value: float | Decimal | None) -> float | None:
     return round(float(value), 4)
 
 
-def _is_paper_account(base_url: str) -> bool:
-    return "paper" in base_url.lower()
+def _legacy_looks_paper(base_url: str | None) -> bool:
+    return bool(base_url and "paper" in base_url.lower())
 
 
-def _get_user_credentials(user: User) -> AlpacaCredentials:
-    return AlpacaCredentials(
-        api_key=decrypt_secret(user.alpaca_api_key),
-        secret_key=decrypt_secret(user.alpaca_secret_key),
-        base_url=user.alpaca_base_url,
+def _encrypt_optional_secret(value: str | None) -> str | None:
+    return encrypt_secret(value) if value is not None else None
+
+
+def _decrypt_optional_secret(value: str | None) -> str | None:
+    return decrypt_secret(value) if value is not None else None
+
+
+def _has_paper_credentials(user: User) -> bool:
+    return bool(
+        (user.alpaca_paper_api_key and user.alpaca_paper_secret_key)
+        or (_legacy_looks_paper(user.alpaca_base_url) and user.alpaca_api_key)
+    )
+
+
+def _has_live_credentials(user: User) -> bool:
+    return bool(
+        (user.alpaca_live_api_key and user.alpaca_live_secret_key)
+        or (not _legacy_looks_paper(user.alpaca_base_url) and user.alpaca_api_key)
+    )
+
+
+def _is_paper_only_account(user: User) -> bool:
+    return _has_paper_credentials(user) and not _has_live_credentials(user)
+
+
+def _get_any_user_credentials(user: User) -> AlpacaCredentials | None:
+    if _has_paper_credentials(user):
+        return _get_user_credentials_for_mode(user, real_money=False)
+    if _has_live_credentials(user):
+        return _get_user_credentials_for_mode(user, real_money=True)
+    return None
+
+
+def _get_user_credentials_for_mode(user: User, *, real_money: bool) -> AlpacaCredentials:
+    if real_money:
+        live_api_key = _decrypt_optional_secret(user.alpaca_live_api_key)
+        live_secret_key = _decrypt_optional_secret(user.alpaca_live_secret_key)
+        if live_api_key and live_secret_key:
+            return AlpacaCredentials(
+                api_key=live_api_key,
+                secret_key=live_secret_key,
+                base_url=settings.alpaca_live_trading_url,
+            )
+        if not _legacy_looks_paper(user.alpaca_base_url):
+            return AlpacaCredentials(
+                api_key=decrypt_secret(user.alpaca_api_key),
+                secret_key=decrypt_secret(user.alpaca_secret_key),
+                base_url=user.alpaca_base_url,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account does not have live Alpaca credentials configured.",
+        )
+
+    paper_api_key = _decrypt_optional_secret(user.alpaca_paper_api_key)
+    paper_secret_key = _decrypt_optional_secret(user.alpaca_paper_secret_key)
+    if paper_api_key and paper_secret_key:
+        return AlpacaCredentials(
+            api_key=paper_api_key,
+            secret_key=paper_secret_key,
+            base_url=settings.alpaca_paper_trading_url,
+        )
+    if _legacy_looks_paper(user.alpaca_base_url):
+        return AlpacaCredentials(
+            api_key=decrypt_secret(user.alpaca_api_key),
+            secret_key=decrypt_secret(user.alpaca_secret_key),
+            base_url=user.alpaca_base_url,
+        )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This account does not have paper Alpaca credentials configured.",
     )
 
 
@@ -137,8 +204,20 @@ def _create_agent_record(
     user: User,
     name: str,
     starting_cash: float,
+    real_money: bool,
     icon_url: str | None,
 ) -> tuple[Agent, str]:
+    if real_money and not _has_live_credentials(user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account does not have live Alpaca credentials configured.",
+        )
+    if not real_money and not _has_paper_credentials(user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account does not have paper Alpaca credentials configured.",
+        )
+
     api_key = generate_agent_api_key()
     agent = Agent(
         user_id=user.id,
@@ -147,7 +226,8 @@ def _create_agent_record(
         api_key_prefix=api_key[:10],
         starting_cash=Decimal(str(starting_cash)),
         icon_url=icon_url,
-        is_paper=_is_paper_account(user.alpaca_base_url),
+        real_money=real_money,
+        is_paper=not real_money,
     )
     db.add(agent)
     db.commit()
@@ -162,12 +242,20 @@ def _create_user_record(
     alpaca_api_key: str,
     alpaca_secret_key: str,
     alpaca_base_url: str,
+    alpaca_paper_api_key: str | None = None,
+    alpaca_paper_secret_key: str | None = None,
+    alpaca_live_api_key: str | None = None,
+    alpaca_live_secret_key: str | None = None,
 ) -> tuple[User, str]:
     account_api_key = generate_account_api_key()
     user = User(
         username=username,
         account_api_key_hash=hash_api_key(account_api_key),
         account_api_key_prefix=account_api_key[:10],
+        alpaca_paper_api_key=_encrypt_optional_secret(alpaca_paper_api_key),
+        alpaca_paper_secret_key=_encrypt_optional_secret(alpaca_paper_secret_key),
+        alpaca_live_api_key=_encrypt_optional_secret(alpaca_live_api_key),
+        alpaca_live_secret_key=_encrypt_optional_secret(alpaca_live_secret_key),
         alpaca_api_key=encrypt_secret(alpaca_api_key),
         alpaca_secret_key=encrypt_secret(alpaca_secret_key),
         alpaca_base_url=alpaca_base_url.rstrip("/"),
@@ -185,6 +273,7 @@ def _build_agent_identity(agent: Agent) -> AgentIdentity:
         name=agent.name,
         icon_url=agent.icon_url,
         starting_cash=float(agent.starting_cash),
+        real_money=agent.real_money,
         is_paper=agent.is_paper,
     )
 
@@ -206,8 +295,8 @@ def _build_account_identity(user: User) -> AccountIdentity:
     return AccountIdentity(
         user_id=user.id,
         username=user.username,
-        alpaca_base_url=user.alpaca_base_url,
-        is_paper=_is_paper_account(user.alpaca_base_url),
+        paper_trading_enabled=_has_paper_credentials(user),
+        live_trading_enabled=_has_live_credentials(user),
         account_api_key_prefix=user.account_api_key_prefix,
     )
 
@@ -219,6 +308,7 @@ def _build_account_agent_summary(agent: Agent) -> AccountAgentSummary:
         icon_url=agent.icon_url,
         starting_cash=float(agent.starting_cash),
         api_key_prefix=agent.api_key_prefix,
+        real_money=agent.real_money,
         is_paper=agent.is_paper,
         created_at=agent.created_at,
     )
@@ -229,9 +319,11 @@ def _generate_client_order_id(symbol: str, side: str) -> str:
 
 
 async def _validate_broker_credentials(
+    *,
     alpaca_api_key: str,
     alpaca_secret_key: str,
     alpaca_base_url: str,
+    label: str = "Alpaca credentials",
 ) -> None:
     if settings.mock_broker_mode:
         return
@@ -246,8 +338,50 @@ async def _validate_broker_credentials(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to validate Alpaca credentials for signup.",
+            detail=f"Unable to validate {label}.",
         ) from exc
+
+
+def _signup_fallback_credentials(payload: SignupRequest) -> tuple[str, str, str]:
+    if (
+        payload.alpaca_paper_api_key is not None
+        and payload.alpaca_paper_secret_key is not None
+    ):
+        return (
+            payload.alpaca_paper_api_key,
+            payload.alpaca_paper_secret_key,
+            settings.alpaca_paper_trading_url,
+        )
+    assert payload.alpaca_live_api_key is not None
+    assert payload.alpaca_live_secret_key is not None
+    return (
+        payload.alpaca_live_api_key,
+        payload.alpaca_live_secret_key,
+        settings.alpaca_live_trading_url,
+    )
+
+
+async def _validate_signup_credentials(payload: SignupRequest) -> None:
+    if (
+        payload.alpaca_paper_api_key is not None
+        and payload.alpaca_paper_secret_key is not None
+    ):
+        await _validate_broker_credentials(
+            alpaca_api_key=payload.alpaca_paper_api_key,
+            alpaca_secret_key=payload.alpaca_paper_secret_key,
+            alpaca_base_url=settings.alpaca_paper_trading_url,
+            label="paper Alpaca credentials",
+        )
+    if (
+        payload.alpaca_live_api_key is not None
+        and payload.alpaca_live_secret_key is not None
+    ):
+        await _validate_broker_credentials(
+            alpaca_api_key=payload.alpaca_live_api_key,
+            alpaca_secret_key=payload.alpaca_live_secret_key,
+            alpaca_base_url=settings.alpaca_live_trading_url,
+            label="live Alpaca credentials",
+        )
 
 
 async def _ensure_benchmark_initialized(request: Request, db: Session) -> None:
@@ -260,7 +394,9 @@ async def _ensure_benchmark_initialized(request: Request, db: Session) -> None:
     prices = price_feed.snapshot()
     if symbol not in prices:
         any_user = db.scalar(select(User).order_by(User.created_at.asc()))
-        credentials = _get_user_credentials(any_user) if any_user is not None else None
+        credentials = (
+            _get_any_user_credentials(any_user) if any_user is not None else None
+        )
         live_price = await get_live_benchmark_price(symbol, credentials)
         if live_price is not None:
             price_feed.prices[symbol] = live_price
@@ -330,7 +466,7 @@ async def _process_trade_submission(
         )
         return response, status.HTTP_409_CONFLICT
 
-    credentials = _get_user_credentials(user)
+    credentials = _get_user_credentials_for_mode(user, real_money=agent.real_money)
     price_feed = request.app.state.price_feed_service
     latest_prices = price_feed.snapshot()
 
@@ -551,16 +687,30 @@ async def create_user(
         )
 
     await _validate_broker_credentials(
-        payload.alpaca_api_key,
-        payload.alpaca_secret_key,
-        payload.alpaca_base_url,
+        alpaca_api_key=payload.alpaca_api_key,
+        alpaca_secret_key=payload.alpaca_secret_key,
+        alpaca_base_url=payload.alpaca_base_url,
+        label="Alpaca credentials",
     )
+    is_paper_credentials = _legacy_looks_paper(payload.alpaca_base_url)
     user, account_api_key = _create_user_record(
         db=db,
         username=payload.username,
         alpaca_api_key=payload.alpaca_api_key,
         alpaca_secret_key=payload.alpaca_secret_key,
         alpaca_base_url=payload.alpaca_base_url,
+        alpaca_paper_api_key=(
+            payload.alpaca_api_key if is_paper_credentials else None
+        ),
+        alpaca_paper_secret_key=(
+            payload.alpaca_secret_key if is_paper_credentials else None
+        ),
+        alpaca_live_api_key=(
+            None if is_paper_credentials else payload.alpaca_api_key
+        ),
+        alpaca_live_secret_key=(
+            None if is_paper_credentials else payload.alpaca_secret_key
+        ),
     )
 
     await _ensure_benchmark_initialized(request, db)
@@ -568,9 +718,11 @@ async def create_user(
         user_id=user.id,
         username=user.username,
         alpaca_base_url=user.alpaca_base_url,
-        is_paper=_is_paper_account(user.alpaca_base_url),
+        is_paper=_is_paper_only_account(user),
         account_api_key=account_api_key,
         account_api_key_prefix=user.account_api_key_prefix,
+        paper_trading_enabled=_has_paper_credentials(user),
+        live_trading_enabled=_has_live_credentials(user),
     )
 
 
@@ -591,6 +743,7 @@ async def create_agent(
         user=user,
         name=payload.name,
         starting_cash=payload.starting_cash,
+        real_money=payload.real_money,
         icon_url=payload.icon_url,
     )
     return AgentCreateResponse(
@@ -599,6 +752,7 @@ async def create_agent(
         api_key=api_key,
         api_key_prefix=agent.api_key_prefix,
         starting_cash=float(agent.starting_cash),
+        real_money=agent.real_money,
         icon_url=agent.icon_url,
         is_paper=agent.is_paper,
     )
@@ -618,27 +772,34 @@ async def signup(
             detail="Username already exists.",
         )
 
-    await _validate_broker_credentials(
-        payload.alpaca_api_key,
-        payload.alpaca_secret_key,
-        payload.alpaca_base_url,
-    )
+    await _validate_signup_credentials(payload)
+    (
+        fallback_api_key,
+        fallback_secret_key,
+        fallback_base_url,
+    ) = _signup_fallback_credentials(payload)
     user, account_api_key = _create_user_record(
         db=db,
         username=payload.username,
-        alpaca_api_key=payload.alpaca_api_key,
-        alpaca_secret_key=payload.alpaca_secret_key,
-        alpaca_base_url=payload.alpaca_base_url,
+        alpaca_api_key=fallback_api_key,
+        alpaca_secret_key=fallback_secret_key,
+        alpaca_base_url=fallback_base_url,
+        alpaca_paper_api_key=payload.alpaca_paper_api_key,
+        alpaca_paper_secret_key=payload.alpaca_paper_secret_key,
+        alpaca_live_api_key=payload.alpaca_live_api_key,
+        alpaca_live_secret_key=payload.alpaca_live_secret_key,
     )
 
     await _ensure_benchmark_initialized(request, db)
     return SignupResponse(
         user_id=user.id,
         username=user.username,
-        alpaca_base_url=user.alpaca_base_url,
-        is_paper=_is_paper_account(user.alpaca_base_url),
+        alpaca_base_url=None,
+        is_paper=_is_paper_only_account(user),
         account_api_key=account_api_key,
         account_api_key_prefix=user.account_api_key_prefix or "",
+        paper_trading_enabled=_has_paper_credentials(user),
+        live_trading_enabled=_has_live_credentials(user),
     )
 
 
@@ -655,12 +816,16 @@ async def create_mock_agent(
         )
 
     username = _next_mock_username(db, payload.username, payload.name)
+    mock_api_key = f"mock-{username}-key"
+    mock_secret_key = f"mock-{username}-secret"
     user, account_api_key = _create_user_record(
         db=db,
         username=username,
-        alpaca_api_key=f"mock-{username}-key",
-        alpaca_secret_key=f"mock-{username}-secret",
-        alpaca_base_url="https://paper-api.alpaca.markets",
+        alpaca_api_key=mock_api_key,
+        alpaca_secret_key=mock_secret_key,
+        alpaca_base_url=settings.alpaca_paper_trading_url,
+        alpaca_paper_api_key=mock_api_key,
+        alpaca_paper_secret_key=mock_secret_key,
     )
 
     agent, api_key = _create_agent_record(
@@ -668,6 +833,7 @@ async def create_mock_agent(
         user=user,
         name=payload.name,
         starting_cash=payload.starting_cash,
+        real_money=False,
         icon_url=payload.icon_url,
     )
 
@@ -678,6 +844,7 @@ async def create_mock_agent(
         name=agent.name,
         api_key=api_key,
         account_api_key=account_api_key,
+        real_money=agent.real_money,
         is_paper=agent.is_paper,
         username=user.username,
     )
@@ -731,6 +898,7 @@ async def create_account_agent(
         user=account,
         name=payload.name,
         starting_cash=payload.starting_cash,
+        real_money=payload.real_money,
         icon_url=payload.icon_url,
     )
     return AgentCreateResponse(
@@ -739,6 +907,7 @@ async def create_account_agent(
         api_key=api_key,
         api_key_prefix=agent.api_key_prefix,
         starting_cash=float(agent.starting_cash),
+        real_money=agent.real_money,
         icon_url=agent.icon_url,
         is_paper=agent.is_paper,
     )
@@ -777,7 +946,15 @@ async def get_prices(
     missing = [symbol for symbol in symbol_list if symbol not in cached]
     if missing:
         user = db.get(User, agent.user_id)
-        latest = await gateway.get_latest_prices(_get_user_credentials(user), missing)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Owning user not found.",
+            )
+        latest = await gateway.get_latest_prices(
+            _get_user_credentials_for_mode(user, real_money=agent.real_money),
+            missing,
+        )
         cached.update(latest)
         price_feed.prices.update(latest)
         price_feed.last_updated_at = datetime.utcnow()

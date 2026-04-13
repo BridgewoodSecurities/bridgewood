@@ -50,6 +50,10 @@ class User(Base):
         String(64), unique=True, index=True
     )
     account_api_key_prefix: Mapped[str | None] = mapped_column(String(16))
+    alpaca_paper_api_key: Mapped[str | None] = mapped_column(Text)
+    alpaca_paper_secret_key: Mapped[str | None] = mapped_column(Text)
+    alpaca_live_api_key: Mapped[str | None] = mapped_column(Text)
+    alpaca_live_secret_key: Mapped[str | None] = mapped_column(Text)
     alpaca_api_key: Mapped[str] = mapped_column(Text, nullable=False)
     alpaca_secret_key: Mapped[str] = mapped_column(Text, nullable=False)
     alpaca_base_url: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -72,6 +76,7 @@ class Agent(Base):
     api_key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
     starting_cash: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     icon_url: Mapped[str | None] = mapped_column(String(500))
+    real_money: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_paper: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

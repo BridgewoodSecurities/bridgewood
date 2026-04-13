@@ -6,7 +6,12 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.models.entities import Agent, BenchmarkSnapshot, BenchmarkState, PortfolioSnapshot
+from app.models.entities import (
+    Agent,
+    BenchmarkSnapshot,
+    BenchmarkState,
+    PortfolioSnapshot,
+)
 from app.services.portfolio_engine import build_portfolio
 
 
@@ -53,7 +58,9 @@ class SnapshotWorker:
         captured = False
 
         with self.session_factory() as db:
-            for agent in db.scalars(select(Agent).order_by(Agent.created_at.asc())).all():
+            for agent in db.scalars(
+                select(Agent).order_by(Agent.created_at.asc())
+            ).all():
                 portfolio = build_portfolio(db, agent, prices)
                 db.add(
                     PortfolioSnapshot(

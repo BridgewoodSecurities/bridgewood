@@ -5,7 +5,14 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Enum as SqlEnum,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base

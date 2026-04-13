@@ -43,7 +43,9 @@ class MarketDataClient:
         if not normalized_symbols:
             return {}
 
-        equities = [symbol for symbol in normalized_symbols if not is_crypto_symbol(symbol)]
+        equities = [
+            symbol for symbol in normalized_symbols if not is_crypto_symbol(symbol)
+        ]
         crypto = [symbol for symbol in normalized_symbols if is_crypto_symbol(symbol)]
         prices: dict[str, Decimal] = {}
 

@@ -159,9 +159,7 @@ def apply_execution_to_position(
     if quantity > current_qty + QUANTITY:
         raise ValueError(f"Insufficient quantity to sell {quantity} {symbol}.")
 
-    realized_pnl = money(
-        ((price - Decimal(position.avg_cost_basis)) * quantity) - fees
-    )
+    realized_pnl = money(((price - Decimal(position.avg_cost_basis)) * quantity) - fees)
     remaining = quantity_value(max(current_qty - quantity, Decimal("0")))
     if remaining <= Decimal("0"):
         db.delete(position)

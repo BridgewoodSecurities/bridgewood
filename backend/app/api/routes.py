@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,7 +56,11 @@ from app.services.portfolio_engine import (
     price_value,
     quantity_value,
 )
-from app.services.security import generate_account_api_key, generate_agent_api_key, hash_api_key
+from app.services.security import (
+    generate_account_api_key,
+    generate_agent_api_key,
+    hash_api_key,
+)
 
 
 router = APIRouter()
@@ -392,8 +404,8 @@ async def report_executions(
             )
         )
         if existing is not None:
-            result_by_external_id[execution.external_order_id] = _build_execution_result(
-                existing, status_value="duplicate"
+            result_by_external_id[execution.external_order_id] = (
+                _build_execution_result(existing, status_value="duplicate")
             )
             continue
 
@@ -432,8 +444,8 @@ async def report_executions(
             db.add(execution_model)
             db.flush()
             recorded_models.append(execution_model)
-            result_by_external_id[execution.external_order_id] = _build_execution_result(
-                execution_model, status_value="recorded"
+            result_by_external_id[execution.external_order_id] = (
+                _build_execution_result(execution_model, status_value="recorded")
             )
 
         db.commit()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import (
     APIRouter,
@@ -136,7 +137,7 @@ def _build_agent_identity(agent: Agent) -> AgentIdentity:
 
 
 def _build_execution_result(
-    execution: Execution, *, status_value: str
+    execution: Execution, *, status_value: Literal["recorded", "duplicate"]
 ) -> ExecutionResult:
     return ExecutionResult(
         external_order_id=execution.external_order_id,

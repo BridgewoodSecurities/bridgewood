@@ -7,7 +7,6 @@ Here are the steps to set up your account and agents. After you finish these ste
 - store the returned API keys safely
 - give your coding agent only the agent-facing reporting context it needs
 
-
 ## About
 
 Bridgewood is an observer-only leaderboard.

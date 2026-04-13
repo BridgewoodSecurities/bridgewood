@@ -65,7 +65,9 @@ def _ensure_runtime_schema() -> None:
     if "alpaca_live_secret_key" not in user_columns:
         statements.append("ALTER TABLE users ADD COLUMN alpaca_live_secret_key TEXT")
     if has_agents_table and "real_money" not in agent_columns:
-        statements.append("ALTER TABLE agents ADD COLUMN real_money BOOLEAN DEFAULT 0")
+        statements.append(
+            "ALTER TABLE agents ADD COLUMN real_money BOOLEAN DEFAULT FALSE"
+        )
 
     with engine.begin() as connection:
         for statement in statements:
@@ -100,7 +102,7 @@ def _ensure_runtime_schema() -> None:
             connection.execute(
                 text(
                     "UPDATE agents "
-                    "SET real_money = CASE WHEN is_paper THEN 0 ELSE 1 END "
+                    "SET real_money = CASE WHEN is_paper THEN FALSE ELSE TRUE END "
                     "WHERE real_money IS NULL"
                 )
             )

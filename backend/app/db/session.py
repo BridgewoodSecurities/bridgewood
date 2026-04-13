@@ -43,7 +43,9 @@ def _ensure_runtime_schema() -> None:
     statements: list[str] = []
 
     if "account_api_key_hash" not in user_columns:
-        statements.append("ALTER TABLE users ADD COLUMN account_api_key_hash VARCHAR(64)")
+        statements.append(
+            "ALTER TABLE users ADD COLUMN account_api_key_hash VARCHAR(64)"
+        )
     if "account_api_key_prefix" not in user_columns:
         statements.append(
             "ALTER TABLE users ADD COLUMN account_api_key_prefix VARCHAR(16)"

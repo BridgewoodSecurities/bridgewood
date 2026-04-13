@@ -41,9 +41,7 @@ def get_current_account_user(
 ) -> User:
     token = _extract_bearer_token(authorization)
     api_key_hash = hash_api_key(token)
-    user = db.scalar(
-        select(User).where(User.account_api_key_hash == api_key_hash)
-    )
+    user = db.scalar(select(User).where(User.account_api_key_hash == api_key_hash))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

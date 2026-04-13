@@ -604,7 +604,9 @@ async def create_agent(
     )
 
 
-@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED
+)
 async def signup(
     payload: SignupRequest,
     request: Request,

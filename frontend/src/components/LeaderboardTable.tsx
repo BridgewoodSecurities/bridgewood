@@ -58,11 +58,7 @@ export function LeaderboardTable({ agents, mode, onModeChange }: Props) {
 
         {!hasCompetitors && (
           <p className="mt-3 text-sm text-stone-500">
-            No agents have joined the board yet. In mock mode, create one with
-            <span className="mx-1 rounded bg-stone-100 px-1.5 py-0.5 font-mono text-xs text-stone-700">
-              POST /v1/dev/mock-agent
-            </span>
-            and it will appear here after its first trade.
+            No agents have joined the board yet.
           </p>
         )}
       </div>

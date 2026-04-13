@@ -1,6 +1,7 @@
  # Development Environment
 .env
 .env.*
+*.env
 !.env.prod
 !.env.dev
 !.env.production

@@ -1,6 +1,6 @@
 # Bridgewood Human Setup Guide
 
-Here are the steps to set up your account and agents. After you finish these steps, hand your coding agent the repo's [SKILL.md](/Users/benjaminchang/code/bridgewood/SKILL.md). That skill teaches the agent how to report filled executions to Bridgewood and how to read the leaderboard-facing API.
+Here are the steps to set up your account and agents. After you finish these steps, hand your coding agent the repo's [CONNECT.md](/Users/benjaminchang/code/bridgewood/CONNECT.md). That skill teaches the agent how to report filled executions to Bridgewood and how to read the leaderboard-facing API.
 
 - create your Bridgewood account
 - create one or more Bridgewood agents
@@ -230,4 +230,4 @@ This repo also includes helper scripts:
 The important split is:
 
 - `START.md` is for the human operator
-- [SKILL.md](/Users/benjaminchang/code/bridgewood/SKILL.md) is for the coding agent
+- [CONNECT.md](/Users/benjaminchang/code/bridgewood/CONNECT.md) is for the coding agent

@@ -1,10 +1,41 @@
 import type { DashboardBootstrap, RangeKey, SnapshotPoint } from "./types";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ??
-  (typeof window !== "undefined"
-    ? window.location.origin
-    : "http://localhost:5173");
+const LOCAL_DEV_API_BASE = "http://localhost:5173";
+const PRODUCTION_API_BASE = "https://bridgewood.onrender.com";
+const PRODUCTION_FRONTEND_HOSTS = new Set(["bridgewood.vercel.app"]);
+
+function normalizeApiBase(rawValue: string) {
+  const parsed = new URL(rawValue);
+  const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+
+  // Accept either https://host or https://host/v1 in env configuration.
+  if (normalizedPath === "/v1") {
+    parsed.pathname = "/";
+  } else if (normalizedPath.length > 0) {
+    parsed.pathname = normalizedPath;
+  }
+
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) {
+    return normalizeApiBase(configured);
+  }
+
+  if (typeof window === "undefined") {
+    return LOCAL_DEV_API_BASE;
+  }
+
+  if (PRODUCTION_FRONTEND_HOSTS.has(window.location.hostname)) {
+    return PRODUCTION_API_BASE;
+  }
+
+  return window.location.origin;
+}
+
+const API_BASE = resolveApiBase();
 
 function buildUrl(path: string, params?: Record<string, string>) {
   const url = new URL(`/v1${path}`, API_BASE);
@@ -17,9 +48,10 @@ function buildUrl(path: string, params?: Record<string, string>) {
 }
 
 async function requestJson<T>(path: string, params?: Record<string, string>) {
-  const response = await fetch(buildUrl(path, params));
+  const url = buildUrl(path, params);
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(`Request failed: ${response.status} (${url.toString()})`);
   }
   return (await response.json()) as T;
 }

@@ -1,6 +1,8 @@
+import json
 from functools import lru_cache
 
 from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +35,25 @@ class Settings(BaseSettings):
     benchmark_symbol: str = "SPY"
     benchmark_starting_cash: float = 10000.0
     activity_page_size: int = 30
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, list):
+            return value
+        if not isinstance(value, str):
+            raise TypeError("cors_origins must be a list or string.")
+
+        raw = value.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            parsed = json.loads(raw)
+            if not isinstance(parsed, list):
+                raise ValueError("cors_origins JSON must decode to a list.")
+            return [str(item).strip() for item in parsed if str(item).strip()]
+
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     @property
     def is_sqlite(self) -> bool:

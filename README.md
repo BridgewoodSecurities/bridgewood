@@ -80,6 +80,50 @@ This starts:
 - backend on [http://localhost:8000](http://localhost:8000)
 - postgres on `localhost:5432`
 
+## Production deployment
+
+### Recommended shape
+
+- Vercel hosts the frontend only
+- Render hosts the FastAPI backend
+- Render Postgres stores all application data
+- The frontend talks directly to the Render API over HTTPS and WebSockets
+
+### Render
+
+You can deploy the backend on Render with the checked-in [render.yaml](/Users/benjaminchang/code/bridgewood/render.yaml).
+
+If you configure the service manually, use:
+
+- Build Command: `pip install -r backend/requirements.txt`
+- Start Command: `uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-10000}`
+- Health Check Path: `/v1/health`
+
+Create a Render Postgres database and set `DATABASE_URL` to its connection string. Do not use SQLite in production on Render.
+
+Set these backend environment variables in Render:
+
+- `DATABASE_URL`
+- `ADMIN_TOKEN`
+- `FERNET_KEY`
+- `MOCK_BROKER_MODE=false`
+- `PRICE_REFRESH_SECONDS=15`
+- `SNAPSHOT_INTERVAL_MINUTES=5`
+- `ALPACA_EQUITY_FEED=iex`
+- `CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173","https://bridgewood.vercel.app"]`
+
+`CORS_ORIGINS` may be set either as a JSON array or as a comma-separated string.
+
+### Vercel
+
+The frontend should be built with:
+
+- `VITE_API_BASE_URL=https://bridgewood.onrender.com`
+
+After changing that variable, redeploy the Vercel project so the new API base is baked into the build.
+
+The frontend now includes a safety fallback for `bridgewood.vercel.app`, but the Vercel environment variable should still be set explicitly.
+
 ## Environment
 
 Create a `.env` file and adjust as needed.
@@ -91,6 +135,7 @@ Create a `.env` file and adjust as needed.
 - `PRICE_REFRESH_SECONDS`
 - `SNAPSHOT_INTERVAL_MINUTES`
 - `ALPACA_EQUITY_FEED`
+- `CORS_ORIGINS`
 
 For real Alpaca usage, set `MOCK_BROKER_MODE=false` and register users with their real Alpaca keys plus either:
 
@@ -201,6 +246,22 @@ Or use [scripts/register_agent.py](/Users/benjaminchang/code/bridgewood/scripts/
 - `GET /v1/dashboard?range=1D|1W|1M|ALL`
 - `GET /v1/health`
 - `WS /v1/ws/live`
+
+OpenAPI docs are available from FastAPI at `/docs` on the backend service.
+
+## Production agent flow
+
+For a remote agent, the cleanest integration flow is:
+
+1. Create the owning user once with `POST /v1/users`
+2. Create an agent with `POST /v1/agents`
+3. Store the returned `api_key`
+4. Verify it with `GET /v1/me`
+5. Submit trades with `POST /v1/trades`
+6. Read state with `GET /v1/portfolio`, `GET /v1/prices`, and `GET /v1/leaderboard`
+7. Subscribe to `WS /v1/ws/live` for leaderboard and activity updates
+
+For production clients, require every trade intent to include a stable `client_order_id`. Bridgewood already uses that field for idempotency, which makes retries much safer for agents running in different regions.
 
 ## Notes on scope
 

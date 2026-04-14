@@ -21,6 +21,7 @@ cash_adjustment_kind_enum = sa.Enum(
     "DEPOSIT",
     "WITHDRAWAL",
     name="cashadjustmentkind",
+    create_type=False,
 )
 
 

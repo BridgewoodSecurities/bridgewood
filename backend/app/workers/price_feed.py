@@ -13,7 +13,11 @@ from app.models.entities import Agent, Position
 from app.schemas.api import LeaderboardPayload
 from app.services.broadcaster import ConnectionManager
 from app.services.leaderboard import build_leaderboard_payload
-from app.services.market_data import MarketDataClient, MarketDataError
+from app.services.market_data import (
+    MarketDataClient,
+    MarketDataError,
+    MarketDataResult,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +39,7 @@ class PriceFeedService:
         self.last_success_at: datetime | None = None
         self.last_error_at: datetime | None = None
         self.last_error_message: str | None = None
+        self.last_provider: str | None = None
         self.consecutive_failures = 0
         self._task: asyncio.Task | None = None
         self.settings = get_settings()
@@ -57,11 +62,12 @@ class PriceFeedService:
     def as_float_map(self) -> dict[str, float]:
         return {symbol: float(price) for symbol, price in self.prices.items()}
 
-    def _record_success(self) -> None:
+    def _record_success(self, provider: str | None) -> None:
         self.last_updated_at = utc_now()
         self.last_success_at = self.last_updated_at
         self.last_error_at = None
         self.last_error_message = None
+        self.last_provider = provider
         self.consecutive_failures = 0
 
     def _record_error(self, exc: Exception) -> None:
@@ -70,11 +76,11 @@ class PriceFeedService:
         self.consecutive_failures += 1
 
     def health_summary(self) -> dict[str, object]:
-        configured = bool(
+        alpaca_configured = bool(
             self.settings.alpaca_api_key and self.settings.alpaca_secret_key
         )
         age_seconds = None
-        healthy = configured and self.last_success_at is not None
+        healthy = self.last_success_at is not None
         if self.last_success_at is not None:
             age_seconds = (utc_now() - self.last_success_at).total_seconds()
         if self.last_success_at and self.last_error_at:
@@ -86,8 +92,10 @@ class PriceFeedService:
                 healthy = False
 
         return {
-            "configured": configured,
+            "configured": True,
+            "alpaca_configured": alpaca_configured,
             "healthy": healthy,
+            "provider": self.last_provider,
             "last_success_at": self.last_success_at,
             "last_error_at": self.last_error_at,
             "last_error_message": self.last_error_message,
@@ -98,7 +106,7 @@ class PriceFeedService:
 
     async def refresh_symbols(self, symbols: list[str]) -> dict[str, Decimal]:
         try:
-            latest = await self.market_data.get_latest_prices(symbols)
+            result: MarketDataResult = await self.market_data.get_latest_prices(symbols)
         except (MarketDataError, Exception) as exc:
             self._record_error(exc)
             logger.exception(
@@ -106,9 +114,10 @@ class PriceFeedService:
             )
             return {}
 
+        latest = result.prices
         if latest:
             self.prices.update(latest)
-            self._record_success()
+            self._record_success(result.provider)
         return latest
 
     async def refresh_once(self) -> LeaderboardPayload:

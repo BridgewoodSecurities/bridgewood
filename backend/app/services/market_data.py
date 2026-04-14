@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import csv
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from io import StringIO
 from typing import Any, cast
@@ -10,6 +11,7 @@ from typing import Any, cast
 import httpx
 
 from app.core.config import get_settings
+from app.core.time import normalize_utc
 
 
 settings = get_settings()
@@ -45,6 +47,12 @@ class MarketDataError(Exception):
 class MarketDataResult:
     prices: dict[str, Decimal]
     provider: str | None
+
+
+@dataclass
+class EquityBar:
+    timestamp: datetime
+    close: Decimal
 
 
 class MarketDataClient:
@@ -86,6 +94,46 @@ class MarketDataClient:
             for symbol, data in payload.items()
             if data.get("p") is not None
         }
+
+    async def _get_alpaca_equity_bars(
+        self,
+        client: httpx.AsyncClient,
+        symbol: str,
+        *,
+        start: datetime,
+        end: datetime,
+        timeframe: str,
+    ) -> list[EquityBar]:
+        response = await client.get(
+            f"{settings.alpaca_data_url}/v2/stocks/bars",
+            headers=self._headers(),
+            params={
+                "symbols": symbol,
+                "timeframe": timeframe,
+                "start": start.isoformat().replace("+00:00", "Z"),
+                "end": end.isoformat().replace("+00:00", "Z"),
+                "feed": settings.alpaca_equity_feed,
+                "adjustment": "raw",
+                "sort": "asc",
+                "limit": 10000,
+            },
+        )
+        if response.status_code >= 400:
+            raise MarketDataError(response.text)
+
+        payload = response.json().get("bars", {})
+        rows = payload.get(symbol, [])
+        bars: list[EquityBar] = []
+        for row in rows:
+            close = row.get("c")
+            timestamp = row.get("t")
+            if close is None or timestamp is None:
+                continue
+            parsed_timestamp = normalize_utc(
+                datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            )
+            bars.append(EquityBar(timestamp=parsed_timestamp, close=to_decimal(close)))
+        return bars
 
     async def _get_alpaca_crypto_prices(
         self, client: httpx.AsyncClient, crypto: list[str]
@@ -311,3 +359,21 @@ class MarketDataClient:
                         provider = "alpaca"
 
         return MarketDataResult(prices=prices, provider=provider)
+
+    async def get_equity_bars(
+        self,
+        symbol: str,
+        *,
+        start: datetime,
+        end: datetime,
+        timeframe: str,
+    ) -> list[EquityBar]:
+        normalized_symbol = normalize_symbol(symbol)
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            return await self._get_alpaca_equity_bars(
+                client,
+                normalized_symbol,
+                start=normalize_utc(start),
+                end=normalize_utc(end),
+                timeframe=timeframe,
+            )

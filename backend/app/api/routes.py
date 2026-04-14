@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -58,7 +59,12 @@ from app.schemas.api import (
     SnapshotPoint,
     SnapshotRange,
 )
-from app.services.leaderboard import build_leaderboard_payload, build_snapshot_series
+from app.services.leaderboard import (
+    build_leaderboard_payload,
+    build_snapshot_series,
+    get_snapshot_lookback,
+)
+from app.services.market_data import MarketDataError
 from app.services.portfolio_engine import (
     apply_execution_to_position,
     build_portfolio,
@@ -80,6 +86,26 @@ settings = get_settings()
 
 def _display_name(agent: Agent) -> str:
     return f"{agent.name}{' *' if agent.is_paper else ''}"
+
+
+def _benchmark_id(symbol: str) -> str:
+    return f"benchmark:{symbol}"
+
+
+def _benchmark_name(symbol: str) -> str:
+    return (
+        "S&P 500 Index"
+        if symbol == settings.benchmark_symbol
+        else f"{symbol} Benchmark"
+    )
+
+
+def _benchmark_timeframe(range_key: SnapshotRange) -> str:
+    if range_key == "1D":
+        return "5Min"
+    if range_key == "1W":
+        return "30Min"
+    return "1Day"
 
 
 def _format_decimal(value: Decimal) -> str:
@@ -332,6 +358,118 @@ def _paginate_executions(
         items=[_build_execution_item(execution) for execution in page_rows],
         next_cursor=next_cursor,
     )
+
+
+def _merge_snapshot_points(
+    points: list[SnapshotPoint], additions: list[SnapshotPoint]
+) -> list[SnapshotPoint]:
+    merged: dict[tuple[str, datetime], SnapshotPoint] = {
+        (point.agent_id, point.snapshot_at): point for point in points
+    }
+    for point in additions:
+        merged[(point.agent_id, point.snapshot_at)] = point
+    return sorted(merged.values(), key=lambda point: point.snapshot_at)
+
+
+async def _ensure_benchmark_snapshots(
+    request: Request,
+    db: Session,
+    *,
+    range_key: SnapshotRange,
+    snapshots: list[SnapshotPoint],
+    leaderboard: LeaderboardPayload | None = None,
+) -> list[SnapshotPoint]:
+    benchmark_points = [point for point in snapshots if point.is_benchmark]
+    if len(benchmark_points) >= 2:
+        return snapshots
+
+    state = db.get(BenchmarkState, 1)
+    if state is None:
+        return snapshots
+
+    start_at = state.created_at
+    lookback = get_snapshot_lookback(range_key)
+    if lookback is not None and lookback > start_at:
+        start_at = lookback
+    end_at = utc_now()
+
+    additions: list[SnapshotPoint] = [
+        SnapshotPoint(
+            agent_id=_benchmark_id(state.symbol),
+            name=_benchmark_name(state.symbol),
+            total_value=float(state.starting_cash),
+            return_pct=0.0,
+            snapshot_at=start_at,
+            is_benchmark=True,
+        )
+    ]
+
+    bars = []
+    try:
+        bars = await request.app.state.price_feed_service.market_data.get_equity_bars(
+            state.symbol,
+            start=start_at,
+            end=end_at,
+            timeframe=_benchmark_timeframe(range_key),
+        )
+    except MarketDataError:
+        bars = []
+
+    starting_cash = Decimal(state.starting_cash)
+    starting_price = Decimal(state.starting_price)
+    if starting_price > 0:
+        for bar in bars:
+            total_value = starting_cash * (bar.close / starting_price)
+            return_pct = ((total_value - starting_cash) / starting_cash) * Decimal(
+                "100"
+            )
+            additions.append(
+                SnapshotPoint(
+                    agent_id=_benchmark_id(state.symbol),
+                    name=_benchmark_name(state.symbol),
+                    total_value=float(total_value),
+                    return_pct=float(return_pct),
+                    snapshot_at=bar.timestamp,
+                    is_benchmark=True,
+                )
+            )
+
+    if leaderboard is not None:
+        benchmark_entry = next(
+            (entry for entry in leaderboard.agents if entry.is_benchmark), None
+        )
+        if benchmark_entry is not None:
+            additions.append(
+                SnapshotPoint(
+                    agent_id=benchmark_entry.id,
+                    name=benchmark_entry.name,
+                    total_value=benchmark_entry.total_value,
+                    return_pct=benchmark_entry.return_pct,
+                    snapshot_at=leaderboard.timestamp,
+                    is_benchmark=True,
+                    icon_url=benchmark_entry.icon_url,
+                )
+            )
+    elif (
+        state.symbol in request.app.state.price_feed_service.snapshot()
+        and starting_price > 0
+    ):
+        current_price = request.app.state.price_feed_service.snapshot()[state.symbol]
+        total_value = starting_cash * (current_price / starting_price)
+        additions.append(
+            SnapshotPoint(
+                agent_id=_benchmark_id(state.symbol),
+                name=_benchmark_name(state.symbol),
+                total_value=float(total_value),
+                return_pct=float(
+                    ((total_value - starting_cash) / starting_cash) * Decimal("100")
+                ),
+                snapshot_at=request.app.state.price_feed_service.last_updated_at,
+                is_benchmark=True,
+            )
+        )
+
+    return _merge_snapshot_points(snapshots, additions)
 
 
 async def _ensure_benchmark_initialized(request: Request, db: Session) -> None:
@@ -768,9 +906,22 @@ async def get_activity(
 
 @router.get("/snapshots", response_model=list[SnapshotPoint])
 async def get_snapshots(
-    range: SnapshotRange = Query(default="1D"), db: Session = Depends(get_db)
+    request: Request,
+    range: SnapshotRange = Query(default="1D"),
+    db: Session = Depends(get_db),
 ) -> list[SnapshotPoint]:
-    return build_snapshot_series(db, range)
+    await _ensure_benchmark_initialized(request, db)
+    if settings.benchmark_symbol not in request.app.state.price_feed_service.snapshot():
+        await request.app.state.price_feed_service.refresh_symbols(
+            [settings.benchmark_symbol]
+        )
+    snapshots = build_snapshot_series(db, range)
+    return await _ensure_benchmark_snapshots(
+        request,
+        db,
+        range_key=range,
+        snapshots=snapshots,
+    )
 
 
 @router.get("/dashboard", response_model=DashboardBootstrap)
@@ -787,6 +938,13 @@ async def get_dashboard(
     )
     activity = _paginate_activity(db, limit=settings.activity_page_size).items
     snapshots = build_snapshot_series(db, range)
+    snapshots = await _ensure_benchmark_snapshots(
+        request,
+        db,
+        range_key=range,
+        snapshots=snapshots,
+        leaderboard=leaderboard,
+    )
     return DashboardBootstrap(
         leaderboard=leaderboard, activity=activity, snapshots=snapshots, range=range
     )

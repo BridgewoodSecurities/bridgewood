@@ -41,6 +41,17 @@ def _display_name(agent: Agent) -> str:
     return f"{agent.name}{' *' if agent.is_paper else ''}"
 
 
+def get_snapshot_lookback(range_key: str) -> datetime | None:
+    now = utc_now()
+    if range_key == "1D":
+        return now - timedelta(days=1)
+    if range_key == "1W":
+        return now - timedelta(weeks=1)
+    if range_key == "1M":
+        return now - timedelta(days=30)
+    return None
+
+
 def get_daily_change_pct(db: Session, agent: Agent) -> float:
     cutoff = utc_now() - timedelta(days=2)
     snapshots = list(
@@ -182,14 +193,7 @@ def build_leaderboard_payload(
 
 
 def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
-    now = utc_now()
-    lookback: datetime | None = None
-    if range_key == "1D":
-        lookback = now - timedelta(days=1)
-    elif range_key == "1W":
-        lookback = now - timedelta(weeks=1)
-    elif range_key == "1M":
-        lookback = now - timedelta(days=30)
+    lookback = get_snapshot_lookback(range_key)
 
     snapshots_query = (
         select(PortfolioSnapshot, Agent)

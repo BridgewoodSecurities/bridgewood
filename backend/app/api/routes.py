@@ -36,6 +36,7 @@ from app.models.entities import (
 )
 from app.schemas.api import (
     AccountAgentCreateRequest,
+    AccountAgentRenameRequest,
     AccountAgentSummary,
     AccountIdentity,
     AccountOverview,
@@ -666,6 +667,22 @@ async def create_account_agent(
         is_active=agent.is_active,
         deactivated_at=agent.deactivated_at,
     )
+
+
+@router.patch("/account/agents/{agent_id}", response_model=AccountAgentSummary)
+async def rename_account_agent(
+    agent_id: str,
+    payload: AccountAgentRenameRequest,
+    request: Request,
+    account: User = Depends(get_current_account_user),
+    db: Session = Depends(get_db),
+) -> AccountAgentSummary:
+    agent = _agent_for_account(db, account=account, agent_id=agent_id)
+    agent.name = payload.name
+    db.commit()
+    db.refresh(agent)
+    await _broadcast_cached_leaderboard(request, db)
+    return _build_account_agent_summary(agent)
 
 
 @router.get(

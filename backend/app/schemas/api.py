@@ -62,6 +62,18 @@ class AccountAgentCreateRequest(APIModel):
         return normalized
 
 
+class AccountAgentRenameRequest(APIModel):
+    name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name is required.")
+        return normalized
+
+
 class AgentCreateResponse(APIModel):
     agent_id: str
     name: str

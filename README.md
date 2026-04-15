@@ -54,7 +54,7 @@ Notes:
 
 - `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` are used only for market-data polling.
 - `VITE_API_BASE_URL` is used by the frontend in production builds. Local Vite development can rely on the `/v1` proxy.
-- `SNAPSHOT_INTERVAL_MINUTES` controls persisted chart snapshots. The default is 2 minutes, and snapshots are only captured during regular U.S. market hours (9:30 AM to 4:00 PM Eastern, weekdays).
+- `SNAPSHOT_INTERVAL_MINUTES` controls persisted chart snapshots. The default is 2 minutes, and snapshots continue on the configured cadence outside regular market hours using the freshest Alpaca mark Bridgewood can retrieve for each held symbol.
 - This refactor performs a clean API reset. If you have an old local `bridgewood.db` from the trade-proxy version, Bridgewood will reset the legacy schema on startup.
 
 ## Run Locally

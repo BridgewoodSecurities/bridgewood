@@ -58,6 +58,27 @@ class MarketDataSelectionTests(unittest.TestCase):
 
         self.assertEqual(price, Decimal("187.420000"))
 
+    def test_alpaca_snapshot_prefers_fresher_quote_over_older_trade(self) -> None:
+        price = self.client._extract_alpaca_equity_price(
+            {
+                "latestTrade": {
+                    "p": 187.42,
+                    "t": "2026-04-14T20:01:00Z",
+                },
+                "latestQuote": {
+                    "bp": 188.0,
+                    "ap": 188.4,
+                    "t": "2026-04-14T20:04:00Z",
+                },
+                "minuteBar": {
+                    "c": 187.9,
+                    "t": "2026-04-14T20:02:00Z",
+                },
+            }
+        )
+
+        self.assertEqual(price, Decimal("188.200000"))
+
     def test_alpaca_snapshot_falls_back_when_symbol_is_not_trading(self) -> None:
         midpoint_price = self.client._extract_alpaca_equity_price(
             {
@@ -87,6 +108,35 @@ class MarketDataSelectionTests(unittest.TestCase):
                         "AAPL": {"latestTrade": {"p": 201.25}},
                         "MSFT": {"latestQuote": {"bp": 99.0, "ap": 101.0}},
                     }
+                },
+            )
+
+            with patch.object(self.client, "_has_alpaca_credentials", return_value=True):
+                with patch.object(self.client, "_headers", return_value={"X": "Y"}):
+                    with patch(
+                        "app.services.market_data.httpx.AsyncClient.get",
+                        new=AsyncMock(return_value=response),
+                    ):
+                        result = await self.client.get_latest_prices(["AAPL", "MSFT"])
+
+            self.assertEqual(result.provider, "alpaca")
+            self.assertEqual(
+                result.prices,
+                {
+                    "AAPL": Decimal("201.250000"),
+                    "MSFT": Decimal("100.000000"),
+                },
+            )
+
+        self._run_async(run())
+
+    def test_get_latest_prices_accepts_top_level_alpaca_snapshot_payload(self) -> None:
+        async def run() -> None:
+            response = httpx.Response(
+                200,
+                json={
+                    "AAPL": {"latestTrade": {"p": 201.25}},
+                    "MSFT": {"latestQuote": {"bp": 99.0, "ap": 101.0}},
                 },
             )
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -43,7 +43,26 @@ class EquityBar:
     close: Decimal
 
 
+@dataclass
+class EquityPriceCandidate:
+    timestamp: datetime | None
+    priority: int
+    price: Decimal
+
+
 class MarketDataClient:
+    def _alpaca_snapshots_payload(self, payload: Any) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {}
+        snapshots = payload.get("snapshots")
+        if isinstance(snapshots, dict):
+            return snapshots
+        return {
+            symbol: snapshot
+            for symbol, snapshot in payload.items()
+            if isinstance(symbol, str) and isinstance(snapshot, dict)
+        }
+
     def _has_alpaca_credentials(self) -> bool:
         return bool(settings.alpaca_api_key and settings.alpaca_secret_key)
 
@@ -76,7 +95,7 @@ class MarketDataClient:
         )
         if response.status_code >= 400:
             raise MarketDataError(response.text)
-        payload = response.json().get("snapshots", {})
+        payload = self._alpaca_snapshots_payload(response.json())
         prices: dict[str, Decimal] = {}
         for symbol, snapshot in payload.items():
             price = self._extract_alpaca_equity_price(snapshot)
@@ -88,10 +107,18 @@ class MarketDataClient:
         if not isinstance(snapshot, dict):
             return None
 
+        candidates: list[EquityPriceCandidate] = []
+
         latest_trade = snapshot.get("latestTrade") or {}
         trade_price = latest_trade.get("p")
         if trade_price is not None:
-            return to_decimal(trade_price)
+            candidates.append(
+                EquityPriceCandidate(
+                    timestamp=self._parse_alpaca_timestamp(latest_trade.get("t")),
+                    priority=4,
+                    price=to_decimal(trade_price),
+                )
+            )
 
         latest_quote = snapshot.get("latestQuote") or {}
         bid_price = latest_quote.get("bp")
@@ -100,15 +127,51 @@ class MarketDataClient:
             bid = Decimal(str(bid_price))
             ask = Decimal(str(ask_price))
             if bid > 0 and ask > 0:
-                return to_decimal((bid + ask) / Decimal("2"))
+                candidates.append(
+                    EquityPriceCandidate(
+                        timestamp=self._parse_alpaca_timestamp(latest_quote.get("t")),
+                        priority=3,
+                        price=to_decimal((bid + ask) / Decimal("2")),
+                    )
+                )
 
         for bar_key in ("minuteBar", "dailyBar", "prevDailyBar"):
             bar = snapshot.get(bar_key) or {}
             close = bar.get("c")
             if close is not None:
-                return to_decimal(close)
+                priority = {
+                    "minuteBar": 2,
+                    "dailyBar": 1,
+                    "prevDailyBar": 0,
+                }[bar_key]
+                candidates.append(
+                    EquityPriceCandidate(
+                        timestamp=self._parse_alpaca_timestamp(bar.get("t")),
+                        priority=priority,
+                        price=to_decimal(close),
+                    )
+                )
 
-        return None
+        if not candidates:
+            return None
+
+        return max(
+            candidates,
+            key=lambda candidate: (
+                candidate.timestamp or datetime.min.replace(tzinfo=UTC),
+                candidate.priority,
+            ),
+        ).price
+
+    def _parse_alpaca_timestamp(self, value: Any) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            return normalize_utc(
+                datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            )
+        except ValueError:
+            return None
 
     async def _get_alpaca_equity_bars(
         self,

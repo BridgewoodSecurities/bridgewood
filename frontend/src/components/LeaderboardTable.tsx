@@ -71,10 +71,10 @@ export function LeaderboardTable({ agents, mode, onModeChange }: Props) {
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
         <table className="min-w-full border-collapse">
           <thead>
-            <tr className="border-b border-stone-200 text-left text-xs uppercase tracking-[0.18em] text-stone-500">
+            <tr className="border-b border-stone-200 bg-white text-left text-xs uppercase tracking-[0.18em] text-stone-500">
               <th className="px-3 py-4">Rank</th>
               <th className="px-3 py-4">Agent</th>
               <th className="px-3 py-4">Cash</th>
@@ -91,7 +91,7 @@ export function LeaderboardTable({ agents, mode, onModeChange }: Props) {
             {agents.map((agent, index) => (
               <tr
                 key={agent.id}
-                className="border-b border-stone-100 text-sm text-stone-700 last:border-b-0"
+                className="border-b border-stone-100 bg-white text-sm text-stone-700 last:border-b-0 even:bg-stone-50/40"
               >
                 <td className="px-3 py-5">
                   <div

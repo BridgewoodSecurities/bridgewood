@@ -294,17 +294,20 @@ def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
         )
 
     points: list[SnapshotPoint] = []
-    snapshots_by_agent: dict[str, list[PortfolioSnapshot]] = {}
+    snapshots_by_agent: dict[str, dict[datetime, PortfolioSnapshot]] = {}
     agents_by_id = {agent.id: agent for agent in agents}
     for snapshot, agent in db.execute(
-        snapshots_query.order_by(PortfolioSnapshot.snapshot_at.asc())
+        snapshots_query.order_by(
+            PortfolioSnapshot.snapshot_at.asc(), PortfolioSnapshot.id.asc()
+        )
     ).all():
-        snapshots_by_agent.setdefault(agent.id, []).append(snapshot)
+        snapshots_by_agent.setdefault(agent.id, {})[snapshot.snapshot_at] = snapshot
         agents_by_id[agent.id] = agent
 
     for agent in agents:
+        snapshot_map = snapshots_by_agent.get(agent.id, {})
         agent_points = _build_agent_snapshot_points(
-            db, agent, snapshots_by_agent.get(agent.id, [])
+            db, agent, list(snapshot_map.values())
         )
         baseline_at = (
             agent.created_at
@@ -330,9 +333,15 @@ def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
             if lookback is None or point.snapshot_at >= lookback
         )
 
+    benchmark_points: dict[datetime, BenchmarkSnapshot] = {}
     for snapshot in db.scalars(
-        benchmark_query.order_by(BenchmarkSnapshot.snapshot_at.asc())
+        benchmark_query.order_by(
+            BenchmarkSnapshot.snapshot_at.asc(), BenchmarkSnapshot.id.asc()
+        )
     ).all():
+        benchmark_points[snapshot.snapshot_at] = snapshot
+
+    for snapshot in benchmark_points.values():
         points.append(
             SnapshotPoint(
                 agent_id=_benchmark_id(snapshot.symbol),

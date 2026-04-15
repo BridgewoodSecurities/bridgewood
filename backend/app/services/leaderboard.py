@@ -274,6 +274,13 @@ def _build_agent_snapshot_points(
 
 def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
     lookback = get_snapshot_lookback(range_key)
+    agents = list(
+        db.scalars(
+            select(Agent)
+            .where(Agent.is_active.is_(True))
+            .order_by(Agent.created_at.asc())
+        )
+    )
 
     snapshots_query = (
         select(PortfolioSnapshot, Agent)
@@ -288,20 +295,40 @@ def build_snapshot_series(db: Session, range_key: str) -> list[SnapshotPoint]:
 
     points: list[SnapshotPoint] = []
     snapshots_by_agent: dict[str, list[PortfolioSnapshot]] = {}
-    agents_by_id: dict[str, Agent] = {}
+    agents_by_id = {agent.id: agent for agent in agents}
     for snapshot, agent in db.execute(
         snapshots_query.order_by(PortfolioSnapshot.snapshot_at.asc())
     ).all():
         snapshots_by_agent.setdefault(agent.id, []).append(snapshot)
         agents_by_id[agent.id] = agent
 
-    for agent_id, snapshots in snapshots_by_agent.items():
-        points.extend(
-            _build_agent_snapshot_points(db, agents_by_id[agent_id], snapshots)
+    for agent in agents:
+        agent_points = _build_agent_snapshot_points(
+            db, agent, snapshots_by_agent.get(agent.id, [])
         )
-
-    if lookback is not None:
-        points = [point for point in points if point.snapshot_at >= lookback]
+        baseline_at = (
+            agent.created_at
+            if lookback is None or agent.created_at >= lookback
+            else None
+        )
+        if baseline_at is not None and (
+            not agent_points or agent_points[0].snapshot_at > baseline_at
+        ):
+            points.append(
+                SnapshotPoint(
+                    agent_id=agent.id,
+                    name=_display_name(agent),
+                    total_value=float(Decimal(agent.starting_cash)),
+                    return_pct=0.0,
+                    snapshot_at=baseline_at,
+                    icon_url=agent.icon_url,
+                )
+            )
+        points.extend(
+            point
+            for point in agent_points
+            if lookback is None or point.snapshot_at >= lookback
+        )
 
     for snapshot in db.scalars(
         benchmark_query.order_by(BenchmarkSnapshot.snapshot_at.asc())

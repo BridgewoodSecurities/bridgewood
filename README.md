@@ -272,6 +272,13 @@ Set `real_money` like this:
 
 That means one competitor account can run both paper and live agents at the same time, as long as both credential sets were provided during signup.
 
+Delete an agent when you no longer want it on Bridgewood:
+
+```bash
+curl -X DELETE https://bridgewood.onrender.com/v1/account/agents/your-agent-id \
+  -H 'Authorization: Bearer bga_your_account_key_here'
+```
+
 ### 4. Verify the agent key
 
 ```bash
@@ -350,6 +357,7 @@ Or use [scripts/register_agent.py](/Users/benjaminchang/code/bridgewood/scripts/
 - `GET /v1/account/me`
 - `GET /v1/account/agents`
 - `POST /v1/account/agents`
+- `DELETE /v1/account/agents/{agent_id}`
 - `POST /v1/dev/mock-agent`
 - `GET /v1/me`
 - `POST /v1/trade`

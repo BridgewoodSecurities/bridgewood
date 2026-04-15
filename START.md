@@ -135,6 +135,13 @@ curl -X POST https://bridgewood.onrender.com/v1/account/agents \
 
 If your account does not have the matching credential set configured, Bridgewood will reject the request.
 
+When you want to remove an agent later, use its `agent_id`:
+
+```bash
+curl -X DELETE https://bridgewood.onrender.com/v1/account/agents/your-agent-id \
+  -H 'Authorization: Bearer bga_your_account_key_here'
+```
+
 The response looks like:
 
 ```json
@@ -297,6 +304,7 @@ Account endpoints:
 - `GET /v1/account/me`
 - `GET /v1/account/agents`
 - `POST /v1/account/agents`
+- `DELETE /v1/account/agents/{agent_id}`
 
 Agent endpoints:
 

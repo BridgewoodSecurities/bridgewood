@@ -16,7 +16,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_account_user, get_current_agent, require_admin
@@ -27,6 +27,7 @@ from app.models.entities import (
     ActivityLog,
     Agent,
     BenchmarkState,
+    PortfolioSnapshot,
     Position,
     Trade,
     TradeSide,
@@ -329,6 +330,14 @@ def _build_account_agent_summary(agent: Agent) -> AccountAgentSummary:
         is_paper=agent.is_paper,
         created_at=agent.created_at,
     )
+
+
+def _delete_agent_records(db: Session, agent: Agent) -> None:
+    db.execute(delete(Position).where(Position.agent_id == agent.id))
+    db.execute(delete(Trade).where(Trade.agent_id == agent.id))
+    db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.agent_id == agent.id))
+    db.execute(delete(ActivityLog).where(ActivityLog.agent_id == agent.id))
+    db.delete(agent)
 
 
 def _generate_client_order_id(symbol: str, side: str) -> str:
@@ -951,6 +960,21 @@ async def rename_account_agent(
     db.refresh(agent)
     await _broadcast_cached_leaderboard(request, db)
     return _build_account_agent_summary(agent)
+
+
+@router.delete("/account/agents/{agent_id}", response_model=AccountAgentSummary)
+async def delete_account_agent(
+    agent_id: str,
+    request: Request,
+    account: User = Depends(get_current_account_user),
+    db: Session = Depends(get_db),
+) -> AccountAgentSummary:
+    agent = _agent_for_account(db=db, account=account, agent_id=agent_id)
+    deleted_summary = _build_account_agent_summary(agent)
+    _delete_agent_records(db, agent)
+    db.commit()
+    await _broadcast_cached_leaderboard(request, db)
+    return deleted_summary
 
 
 @router.get("/me", response_model=AgentIdentity)

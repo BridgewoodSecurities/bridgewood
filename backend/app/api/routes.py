@@ -169,10 +169,10 @@ async def _get_prices_for_agents(
 
 
 def _build_execution_summary(agent: Agent, execution: Execution) -> str:
-    action = "bought" if execution.side == ExecutionSide.BUY else "sold"
+    action = "Bought" if execution.side == ExecutionSide.BUY else "Sold"
     quantity = _format_decimal(Decimal(execution.quantity))
     price = Decimal(execution.price_per_share).quantize(Decimal("0.01"))
-    return f"{_display_name(agent)} {action} {quantity} {execution.symbol} @ ${price}"
+    return f"{action} {quantity} {execution.symbol} @ ${price}"
 
 
 def _build_execution_metadata(execution: Execution) -> dict[str, str | float]:
